@@ -87,7 +87,7 @@
 
     <section id="editor" class="card hidden">
       <div class="stage">
-        <video id="video" playsinline muted loop></video>
+        <video id="video" playsinline webkit-playsinline muted loop preload="auto"></video>
         <span class="badge">◉ LIVE</span>
       </div>
       <div class="meta" id="meta"></div>
@@ -121,7 +121,7 @@
 </main>
 
 <script type="module">
-import { makeLivePhotoMov, addLivePhotoExif, newAssetId, inspectVideo } from './livephoto.js?v=1';
+import { makeLivePhotoMov, addLivePhotoExif, newAssetId, inspectVideo } from './livephoto.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const fileInput = $('file'), drop = $('drop'), editor = $('editor'), done = $('done');
@@ -173,8 +173,10 @@ function fail(msg) {
 function seek(t) {
   return new Promise((resolve) => {
     if (Math.abs(video.currentTime - t) < 0.001 && video.readyState >= 2) return resolve();
-    const on = () => { video.removeEventListener('seeked', on); resolve(); };
+    let timer;
+    const on = () => { clearTimeout(timer); video.removeEventListener('seeked', on); resolve(); };
     video.addEventListener('seeked', on);
+    timer = setTimeout(on, 2000); // iOS Safari sometimes skips 'seeked'
     video.currentTime = t;
   });
 }

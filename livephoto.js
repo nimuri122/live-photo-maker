@@ -126,10 +126,12 @@ export async function inspectVideo(file) {
 const CONTENT_ID_KEY = 'com.apple.quicktime.content.identifier';
 const STILL_TIME_KEY = 'com.apple.quicktime.still-image-time';
 
-function buildMeta(existing, assetId) {
-  let keys = []; // {ns:Uint8Array(4), name:Uint8Array}
-  let items = []; // {index, payload}
-  if (existing) {
+function readMdtaMeta(existing) {
+  // returns {keys, items} for a QuickTime 'mdta' meta box, or null if it's some other kind
+  const keys = []; // {ns:Uint8Array(4), name:Uint8Array}
+  const items = []; // {index, payload}
+  let ok = false;
+  {
     const d = existing.data;
     let off = -1;
     if (d.length >= 12 && str4(d, 4) === 'hdlr') off = 0;            // QuickTime style
@@ -138,6 +140,7 @@ function buildMeta(existing, assetId) {
       const kids = parseBoxes(d, off, d.length);
       const h = kids.find((k) => k.type === 'hdlr');
       if (h && str4(d, h.start + h.hdr + 8) === 'mdta') {
+        ok = true;
         const kb = kids.find((k) => k.type === 'keys');
         const ib = kids.find((k) => k.type === 'ilst');
         if (kb) {
@@ -159,12 +162,26 @@ function buildMeta(existing, assetId) {
       }
     }
   }
-  // drop any old content identifier, re-index
+  return ok ? { keys, items } : null;
+}
+
+function buildMeta(existingMetas, assetId) {
+  // merge every existing mdta meta, dropping any old content identifier (and duplicate keys)
   const td = new TextDecoder();
-  const keep = keys.map((k, i) => ({ ...k, old: i + 1 })).filter((k) => td.decode(k.name) !== CONTENT_ID_KEY);
-  const remap = new Map(keep.map((k, i) => [k.old, i + 1]));
-  items = items.filter((it) => remap.has(it.index)).map((it) => ({ index: remap.get(it.index), payload: it.payload }));
-  keys = keep;
+  let keys = [], items = [];
+  const seen = new Set();
+  for (const m of existingMetas) {
+    const r = readMdtaMeta(m);
+    if (!r) continue;
+    r.keys.forEach((k, i) => {
+      const name = td.decode(k.name);
+      if (name === CONTENT_ID_KEY || seen.has(name)) return;
+      seen.add(name);
+      keys.push(k);
+      const idx = keys.length;
+      for (const it of r.items) if (it.index === i + 1) items.push({ index: idx, payload: it.payload });
+    });
+  }
   keys.push({ ns: cc('mdta'), name: te.encode(CONTENT_ID_KEY) });
   items.push({
     index: keys.length,
@@ -265,7 +282,20 @@ export async function makeLivePhotoMov(file, { assetId, stillTime }) {
     }
   }
 
-  // 3. new track id + still-image-time track
+  // 3. drop any existing still-image-time track (re-converting a Live Photo video), add ours
+  const stillKey = te.encode(STILL_TIME_KEY);
+  const hasBytes = (hay, needle) => {
+    outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+      for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+      return true;
+    }
+    return false;
+  };
+  moov.children = moov.children.filter((c) => {
+    if (c.type !== 'trak' || trackInfo(c).codec !== 'mebx') return true;
+    const stsd = path(c, 'mdia', 'minf', 'stbl', 'stsd');
+    return !(stsd && hasBytes(stsd.data, stillKey));
+  });
   const mvhd = child(moov, 'mvhd');
   const mv = mvhdInfo(mvhd);
   const trackIds = moov.children.filter((c) => c.type === 'trak')
@@ -279,10 +309,21 @@ export async function makeLivePhotoMov(file, { assetId, stillTime }) {
     trackId, timescale: mv.timescale, stillUnits, sampleOffset, sampleSize: sample.length,
   });
 
-  // 4. content identifier in moov/meta
-  const metaIdx = moov.children.findIndex((c) => c.type === 'meta');
-  const meta = buildMeta(metaIdx >= 0 ? moov.children[metaIdx] : null, assetId);
-  if (metaIdx >= 0) moov.children.splice(metaIdx, 1);
+  // 4. content identifier in moov/meta (merging any mdta metadata from moov/meta and moov/udta/meta)
+  const existingMetas = moov.children.filter((c) => c.type === 'meta');
+  const udta = child(moov, 'udta');
+  if (udta) {
+    try {
+      const kids = toTree(udta.data, 0, udta.data.length);
+      const um = kids.filter((k) => k.type === 'meta' && readMdtaMeta(k));
+      if (um.length) {
+        existingMetas.push(...um);
+        udta.data = concat(kids.filter((k) => !um.includes(k)).map(serialize));
+      }
+    } catch { /* leave unusual udta untouched */ }
+  }
+  const meta = buildMeta(existingMetas, assetId);
+  moov.children = moov.children.filter((c) => c.type !== 'meta');
 
   let lastTrak = -1;
   moov.children.forEach((c, i) => { if (c.type === 'trak') lastTrak = i; });
