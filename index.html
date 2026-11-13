@@ -78,6 +78,10 @@
   <p class="lede">Turn any video into an iPhone Live Photo — perfect for Live wallpapers. Everything happens on your device; nothing is uploaded.</p>
 
   <div class="stack">
+    <div id="inapp" class="card hidden" style="border-color:var(--accent)">
+      <strong>Open this page in Safari first</strong>
+      <p class="note" style="margin:4px 0 0">You're in <span id="inappName">an app's</span> built-in browser, which can't save Live Photos. Tap <b>⋯</b> or the share icon and choose <b>Open in Safari</b> (or copy the link into Safari).</p>
+    </div>
     <label id="drop" class="card drop" for="file">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3"/></svg>
       <strong>Choose a video</strong>
@@ -127,6 +131,11 @@ const $ = (id) => document.getElementById(id);
 const fileInput = $('file'), drop = $('drop'), editor = $('editor'), done = $('done');
 const video = $('video'), still = $('still');
 let current = null, urls = [], shareFiles = null;
+
+const inApp = [['Snapchat', /Snapchat/i], ['TikTok', /musical_ly|BytedanceWebview|TikTok/i],
+  ['Instagram', /Instagram/i], ['Facebook', /FBAN|FBAV/i], ['Messenger', /Messenger/i]]
+  .find(([, re]) => re.test(navigator.userAgent));
+if (inApp) { $('inappName').textContent = inApp[0] + "'s"; $('inapp').classList.remove('hidden'); }
 
 const fmt = (s) => s.toFixed(2) + 's';
 const revoke = () => { urls.forEach(URL.revokeObjectURL); urls = []; };
