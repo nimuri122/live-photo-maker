@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Photo Maker</title>
+<meta name="description" content="Turn any video into an iPhone Live Photo. Runs entirely in your browser — nothing is uploaded.">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='5' fill='%23ffd23f'/><circle cx='16' cy='16' r='9.5' fill='none' stroke='%23ffd23f' stroke-width='2'/><circle cx='16' cy='16' r='14' fill='none' stroke='%23ffd23f' stroke-width='1.6' stroke-dasharray='1.6 2.4'/></svg>">
+<style>
+  :root {
+    --bg: #f6f5f2; --surface: #ffffff; --ink: #16161a; --muted: #6b6b75; --line: #e4e2dc;
+    --accent: #f5b700; --accent-ink: #1a1400; --danger: #c2372b; --ok: #1f8a4c;
+    --radius: 18px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0b0f; --surface: #16161c; --ink: #f3f2ee; --muted: #9a9aa6; --line: #2a2a33;
+      --accent: #ffd23f; --accent-ink: #1a1400; --danger: #ff6b5e; --ok: #4ccf86; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) 16px 48px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .logo { width: 44px; height: 44px; flex: none; }
+  h1 { font-size: 26px; letter-spacing: -0.02em; margin: 0; }
+  .lede { color: var(--muted); margin: 4px 0 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .drop { display: grid; place-items: center; text-align: center; gap: 6px; min-height: 220px; cursor: pointer;
+    border: 2px dashed var(--line); transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); }
+  .drop strong { font-size: 18px; }
+  .drop span { color: var(--muted); font-size: 14px; }
+  .drop svg { width: 42px; height: 42px; color: var(--accent); }
+  input[type=file] { display: none; }
+  .stage { position: relative; border-radius: 14px; overflow: hidden; background: #000; }
+  .stage video { display: block; width: 100%; max-height: 62vh; object-fit: contain; background: #000; }
+  .badge { position: absolute; top: 10px; left: 10px; display: inline-flex; gap: 6px; align-items: center;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .meta { color: var(--muted); font-size: 13px; margin: 10px 2px 0; display: flex; gap: 12px; flex-wrap: wrap; }
+  label.row { display: block; margin-top: 18px; font-weight: 600; font-size: 14px; }
+  label.row small { color: var(--muted); font-weight: 400; }
+  input[type=range] { width: 100%; margin: 10px 0 0; accent-color: var(--accent); height: 28px; }
+  .btn { appearance: none; border: 0; border-radius: 14px; padding: 15px 18px; font: inherit; font-weight: 650;
+    width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    text-decoration: none; transition: transform .06s, opacity .15s; }
+  .btn:active { transform: scale(.985); }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  .primary { background: var(--accent); color: var(--accent-ink); margin-top: 20px; }
+  .secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .note { font-size: 14px; color: var(--muted); }
+  .warn { color: var(--danger); font-size: 14px; margin-top: 12px; }
+  .done h2 { font-size: 18px; margin: 0 0 4px; }
+  .done img { width: 100%; max-height: 46vh; object-fit: contain; background: #000; border-radius: 12px; display: block; margin: 12px 0 4px; }
+  .steps { padding-left: 20px; margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+  .steps li { margin: 4px 0; }
+  .steps b { color: var(--ink); font-weight: 600; }
+  .link { background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; text-decoration: underline;
+    cursor: pointer; padding: 12px 0 0; display: block; margin: 0 auto; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 28px; }
+  .hidden { display: none !important; }
+  .stack > * + * { margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg class="logo" viewBox="0 0 44 44" aria-hidden="true">
+      <circle cx="22" cy="22" r="7" fill="var(--accent)"/>
+      <circle cx="22" cy="22" r="13" fill="none" stroke="var(--accent)" stroke-width="2.4"/>
+      <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="2 3.2"/>
+    </svg>
+    <h1>Live Photo Maker</h1>
+  </header>
+  <p class="lede">Turn any video into an iPhone Live Photo — perfect for Live wallpapers. Everything happens on your device; nothing is uploaded.</p>
+
+  <div class="stack">
+    <label id="drop" class="card drop" for="file">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3"/></svg>
+      <strong>Choose a video</strong>
+      <span>or drop it here · MP4 or MOV · 1–5 seconds works best</span>
+      <input id="file" type="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v">
+    </label>
+
+    <section id="editor" class="card hidden">
+      <div class="stage">
+        <video id="video" playsinline muted loop></video>
+        <span class="badge">◉ LIVE</span>
+      </div>
+      <div class="meta" id="meta"></div>
+      <div class="warn hidden" id="warn"></div>
+      <label class="row" for="still">Key photo <small id="stillLabel"></small></label>
+      <input id="still" type="range" min="0" max="1" step="0.01" value="0">
+      <p class="note" style="margin:6px 0 0">Drag to pick the frame that shows when the Live Photo isn't playing.</p>
+      <button id="make" class="btn primary">Make Live Photo</button>
+      <button id="reset" class="link" type="button">Choose a different video</button>
+    </section>
+
+    <section id="done" class="card done hidden">
+      <h2>Your Live Photo is ready</h2>
+      <p class="note" style="margin:0">Two files make one Live Photo: a photo and a video that share the same ID.</p>
+      <img id="thumb" alt="Key photo preview">
+      <button id="share" class="btn primary hidden">Save to Photos</button>
+      <div class="grid2">
+        <a id="dlJpg" class="btn secondary" download>Photo (.JPG)</a>
+        <a id="dlMov" class="btn secondary" download>Video (.MOV)</a>
+      </div>
+      <ol class="steps" id="howto">
+        <li><b>iPhone:</b> tap <b>Save to Photos</b>, then choose <b>Save 2 Items</b>.</li>
+        <li><b>Mac:</b> download both files and drag them into the Photos app together.</li>
+        <li>Then AirDrop or iCloud-sync it to your phone and set it as a wallpaper.</li>
+      </ol>
+      <button id="again" class="link" type="button">Make another</button>
+    </section>
+  </div>
+
+  <footer>Works with H.264 / HEVC videos · private by design</footer>
+</main>
+
+<script type="module">
+import { makeLivePhotoMov, addLivePhotoExif, newAssetId, inspectVideo } from './livephoto.js?v=1';
+
+const $ = (id) => document.getElementById(id);
+const fileInput = $('file'), drop = $('drop'), editor = $('editor'), done = $('done');
+const video = $('video'), still = $('still');
+let current = null, urls = [], shareFiles = null;
+
+const fmt = (s) => s.toFixed(2) + 's';
+const revoke = () => { urls.forEach(URL.revokeObjectURL); urls = []; };
+
+function showOnly(el) {
+  for (const x of [drop, editor, done]) x.classList.toggle('hidden', x !== el);
+}
+
+async function load(file) {
+  if (!file) return;
+  revoke();
+  current = file;
+  $('warn').classList.add('hidden');
+  let info = null;
+  try { info = await inspectVideo(file); } catch (e) { return fail(e.message); }
+  const url = URL.createObjectURL(file); urls.push(url);
+  video.src = url;
+  await new Promise((r, j) => { video.onloadedmetadata = r; video.onerror = () => j(); }).catch(() => {});
+  const dur = video.duration && isFinite(video.duration) ? video.duration : info.duration;
+  still.max = Math.max(0, dur - 0.05).toFixed(2);
+  still.value = Math.min(dur / 2, dur).toFixed(2);
+  $('stillLabel').textContent = fmt(+still.value);
+  const parts = [fmt(dur), video.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : '',
+    (info.videoCodec || '?').replace('avc1', 'H.264').replace('hvc1', 'HEVC').replace('hev1', 'HEVC')];
+  $('meta').innerHTML = parts.filter(Boolean).map((p) => `<span>${p}</span>`).join('');
+  const warns = [];
+  if (!info.compatible) warns.push(`This video uses ${info.videoCodec || 'an unknown'} codec. iPhone Live Photos need H.264 or HEVC — re-export it as MP4/MOV first.`);
+  if (info.duration > 5.5) warns.push('Longer than ~5 s: Photos may refuse it or cut it short. Trim it first for best results.');
+  if (warns.length) { $('warn').textContent = warns.join(' '); $('warn').classList.remove('hidden'); }
+  $('make').disabled = !info.compatible;
+  showOnly(editor);
+  seek(+still.value);
+  video.play().catch(() => {});
+}
+
+function fail(msg) {
+  showOnly(editor);
+  $('meta').innerHTML = '';
+  $('warn').textContent = msg;
+  $('warn').classList.remove('hidden');
+  $('make').disabled = true;
+}
+
+function seek(t) {
+  return new Promise((resolve) => {
+    if (Math.abs(video.currentTime - t) < 0.001 && video.readyState >= 2) return resolve();
+    const on = () => { video.removeEventListener('seeked', on); resolve(); };
+    video.addEventListener('seeked', on);
+    video.currentTime = t;
+  });
+}
+
+still.addEventListener('input', () => {
+  video.pause();
+  $('stillLabel').textContent = fmt(+still.value);
+  seek(+still.value);
+});
+
+async function grabFrame(t) {
+  video.pause();
+  await seek(t);
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const c = document.createElement('canvas');
+  c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.95));
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), width: c.width, height: c.height };
+}
+
+$('make').addEventListener('click', async () => {
+  const btn = $('make');
+  btn.disabled = true; btn.textContent = 'Making…';
+  try {
+    const assetId = newAssetId();
+    const t = +still.value;
+    const frame = await grabFrame(t);
+    const jpg = addLivePhotoExif(frame.bytes, { assetId, width: frame.width, height: frame.height });
+    const mov = await makeLivePhotoMov(current, { assetId, stillTime: t });
+    const base = 'LIVE_' + assetId.slice(0, 8);
+    const jpgFile = new File([jpg], base + '.JPG', { type: 'image/jpeg' });
+    const movFile = new File([mov], base + '.MOV', { type: 'video/quicktime' });
+    const ju = URL.createObjectURL(jpgFile), mu = URL.createObjectURL(movFile);
+    urls.push(ju, mu);
+    $('thumb').src = ju;
+    Object.assign($('dlJpg'), { href: ju, download: jpgFile.name });
+    Object.assign($('dlMov'), { href: mu, download: movFile.name });
+    shareFiles = [jpgFile, movFile];
+    const canShare = navigator.canShare && navigator.canShare({ files: shareFiles });
+    $('share').classList.toggle('hidden', !canShare);
+    showOnly(done);
+  } catch (e) {
+    console.error(e);
+    $('warn').textContent = 'Something went wrong: ' + e.message;
+    $('warn').classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Make Live Photo';
+  }
+});
+
+$('share').addEventListener('click', async () => {
+  try { await navigator.share({ files: shareFiles }); }
+  catch (e) { if (e.name !== 'AbortError') alert('Sharing failed — use the download buttons instead.'); }
+});
+
+fileInput.addEventListener('change', () => load(fileInput.files[0]));
+$('reset').addEventListener('click', () => { fileInput.value = ''; fileInput.click(); });
+$('again').addEventListener('click', () => { fileInput.value = ''; revoke(); showOnly(drop); });
+for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
+for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
